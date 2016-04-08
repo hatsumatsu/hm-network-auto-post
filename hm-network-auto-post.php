@@ -44,17 +44,9 @@ class HMNetworkAutoPost {
 	public function load_settings() {
 		$this->settings = apply_filters( 'hmnap/settings', $this->settings );
 
-		// TODO:
-		// switch from publish_post to save_post action to include ACF fields...
-		// https://codex.wordpress.org/Plugin_API/Action_Reference/save_post
-
 		// attach publish action 
-		// specific for each post type
-		if( $this->settings ) {
-			foreach( $this->settings as $post_type => $settings ) {
-				add_action( 'publish_' . $post_type, array( $this, 'copy_post' ), 10, 2 );
-			}
-		}					
+		// use save_post to include ACF fields which fire late
+		add_action( 'save_post', array( $this, 'copy_post' ), 100, 2 );				
 	}
 
 
@@ -70,16 +62,29 @@ class HMNetworkAutoPost {
 
 	/**
 	 * Copy posts 
-	 * @param  int $post_id source post ID
-	 * @param  WP_Post $post source post
+	 * @param int $post_id source post ID
+	 * @param WP_Post $post source post
+	 * @param bool $update Whether this is an existing post being updated or not.
 	 */
 	public function copy_post( $post_id, $post ) {
-		$this->write_log( 'publish_post' );
+		$this->write_log( 'save_post' );
 		$this->write_log( $post_id );
 		$this->write_log( $post->ID );
 		$this->write_log( $post->post_status );
 		$this->write_log( $post->post_title );
 		$this->write_log( $post->post_content );
+
+		// return if post is post revisions
+		if( wp_is_post_revision( $post_id ) ) {
+			$this->write_log( 'ignore revision' );
+			return;
+		}
+
+		// return if post is trash or auto draft
+		if( $post->post_status == 'trash' || $post->post_status == 'draft' || $post->post_status == 'auto-draft' ) {
+			$this->write_log( 'ignore auto draft or trash' );
+			return;
+		}
 
 		// if post type is okay
 		if( array_key_exists( $post->post_type, $this->settings ) ) {
@@ -294,13 +299,13 @@ class HMNetworkAutoPost {
 	 * @param  string|array $log 
 	 */
 	public function write_log( $log )  {
-	    if( true === WP_DEBUG ) {
+	    // if( true === WP_DEBUG ) {
 	        if( is_array( $log ) || is_object( $log ) ) {
-	            error_log( print_r( $log . "\n", true ), 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
+	            error_log( print_r( 'hmnap: ' . $log . "\n", true ), 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
 	        } else {
-	            error_log( $log . "\n", 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
+	            error_log( 'hmnap: ' . $log . "\n", 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
 	        }
-	    }
+	    // }
 	}
 }
 
