@@ -15,25 +15,34 @@ class HMNetworkAutoPost {
 	protected $settings;
 
 	public function __construct() {
+		// i11n
+		load_plugin_textdomain( 'hm-network-auto-post' );		
+
 		// cache MPL API
 		add_action( 'inpsyde_mlp_loaded', array( $this, 'cache_mlp_api' ) );
 
 		// load settings
 		add_action( 'after_setup_theme', array( $this, 'load_settings' ) );
 
+		// attach publish action 
+		// use save_post to include ACF fields which fire late
+		add_action( 'save_post', array( $this, 'copy_post' ), 100, 2 );			
+
 		// init meta box
 		add_action( 'load-post.php', array( $this, 'init_metabox' ) );
 		add_action( 'load-post-new.php', array( $this, 'init_metabox' ) );
 
+		add_action( 'admin_enqueue_scripts', array( $this, 'admin_css' ) );
+
 		// default settings
 		$this->settings = array(
-			'post' => array(
-				'post_status' 		=> 'publish',
-				'post_thumbnail' 	=> true,
-				'meta' 				=> array(
-					'custom'
-				)
-			)
+			// 'post' => array(
+			// 	'post_status' 		=> 'publish',
+			// 	'post_thumbnail' 	=> true,
+			// 	'meta' 				=> array(
+			// 		'custom'
+			// 	)
+			// )
 		);
 	}
 
@@ -42,11 +51,7 @@ class HMNetworkAutoPost {
 	 * Load settings from filter 'hmnap/settings'
 	 */
 	public function load_settings() {
-		$this->settings = apply_filters( 'hmnap/settings', $this->settings );
-
-		// attach publish action 
-		// use save_post to include ACF fields which fire late
-		add_action( 'save_post', array( $this, 'copy_post' ), 100, 2 );				
+		$this->settings = apply_filters( 'hmnap/settings', $this->settings );			
 	}
 
 
@@ -269,6 +274,8 @@ class HMNetworkAutoPost {
 				foreach( $relations as $site_id => $relation ) {
 					if( $site_id !== $source_site_id ) {
 						switch_to_blog( $site_id );
+
+						echo '<div class="hmnap-language">';
 						echo '<h3>';
 						echo '<a href="' . get_edit_post_link( $relation ) . '">';
 						echo get_the_title( $relation );
@@ -276,22 +283,30 @@ class HMNetworkAutoPost {
 						echo '</h3>';
 						echo '<h4 class="info">';
 						// echo get_bloginfo( 'name' );
-						if( $language_titles[ $site_id ] ) {
+						if( array_key_exists( $site_id, $language_titles ) ) {
 							echo $language_titles[ $site_id ];
 						}
 						echo '</h4>';
-						echo '<p>';
-						echo '<a href="' . get_edit_post_link( $relation ) . '" class="button">';
-						echo __( 'Edit', 'hm-network-auto-post' );
-						echo '</a>';
-						echo '</p>';
-						echo '<hr>';
+						// echo '<a href="' . get_edit_post_link( $relation ) . '" class="button">';
+						// echo __( 'Edit', 'hm-network-auto-post' );
+						// echo '</a>';
+						echo '</div>';
 						restore_current_blog();
 					}
 				}
 			}
 		}
     }    
+
+
+	/**
+	 * Register admin CSS
+	 *
+	 */
+	public function admin_css() {
+	    wp_register_style( 'hmnap-admin-style', WP_PLUGIN_URL . '/hm-network-auto-post/css/hm-network-auto-post-admin.css' );
+	    wp_enqueue_style( 'hmnap-admin-style' );
+	} 
 
 
 	/**

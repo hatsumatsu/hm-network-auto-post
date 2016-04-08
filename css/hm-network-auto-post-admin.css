@@ -1,0 +1,16 @@
+.hmnap-language {
+	border-bottom: 1px solid #eee;
+}
+
+.hmnap-language:last-child {
+	border-bottom: none;
+}
+
+
+.hmnap-language > h3 {
+	
+}
+
+.hmnap-language > .button {
+	float: right;
+}
