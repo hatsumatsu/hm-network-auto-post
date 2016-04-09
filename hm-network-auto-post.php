@@ -95,6 +95,7 @@ class HMNetworkAutoPost {
 		if( array_key_exists( $post->post_type, $this->settings ) ) {
 			$this->write_log( 'post type is okay' );		
 
+			// post is not synced yet
 			if( !get_post_meta( $post_id, '_network-auto-post--synced', true ) ) {
 				$this->write_log( 'post is not yet synced' );		
 
@@ -163,7 +164,9 @@ class HMNetworkAutoPost {
 								// switch back to source site
 								restore_current_blog();
 
-								// try to set MultilingualPress relation
+			                    /**
+			                     * set MultilingualPress relation
+			                     */
 			                    if( $this->mpl_api_cache ) {            
 			                        $this->write_log( 'API cache found' );
 
@@ -177,7 +180,10 @@ class HMNetworkAutoPost {
 			                        );
 			                    }		
 
-			                    // call custom action 
+
+			                    /**
+			                     * call custom action
+			                     */
 			                    do_action( 
 			                    	'hmnap/create_post',
 		                            $source_site_id,
@@ -185,6 +191,7 @@ class HMNetworkAutoPost {
 		                            $post_id,
 		                            $copy_id
 		                        );		
+
 
 			                    /**
 			                     * set thumbnail image
@@ -210,6 +217,7 @@ class HMNetworkAutoPost {
 			                        }
 
 		                        }
+
 
 		                        /**
 		                         * TODO 
@@ -314,13 +322,13 @@ class HMNetworkAutoPost {
 	 * @param  string|array $log 
 	 */
 	public function write_log( $log )  {
-	    // if( true === WP_DEBUG ) {
+	    if( true === WP_DEBUG ) {
 	        if( is_array( $log ) || is_object( $log ) ) {
 	            error_log( print_r( 'hmnap: ' . $log . "\n", true ), 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
 	        } else {
 	            error_log( 'hmnap: ' . $log . "\n", 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
 	        }
-	    // }
+	    }
 	}
 }
 
