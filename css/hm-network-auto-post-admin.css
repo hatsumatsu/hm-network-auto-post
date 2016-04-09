@@ -14,3 +14,14 @@
 .hmnap-language > .button {
 	float: right;
 }
+
+#inpsyde_multilingual_1,
+#inpsyde_multilingual_2,
+#inpsyde_multilingual_3,
+#inpsyde_multilingual_4,
+#inpsyde_multilingual_5,
+#inpsyde_multilingual_6,
+#inpsyde_multilingual_7,
+#inpsyde_multilingual_8 {
+	display: none;
+}

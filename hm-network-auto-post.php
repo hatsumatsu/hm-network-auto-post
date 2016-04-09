@@ -36,13 +36,13 @@ class HMNetworkAutoPost {
 
 		// default settings
 		$this->settings = array(
-			// 'post' => array(
-			// 	'post_status' 		=> 'publish',
-			// 	'post_thumbnail' 	=> true,
-			// 	'meta' 				=> array(
-			// 		'custom'
-			// 	)
-			// )
+			'post' => array(
+				'post_status' 		=> 'publish',
+				'post_thumbnail' 	=> true,
+				'meta' 				=> array(
+					'custom'
+				)
+			)
 		);
 	}
 
@@ -145,8 +145,22 @@ class HMNetworkAutoPost {
 			        // ... that is not the source site
 			        if( $site['blog_id'] != $source_site_id ) {
 			        	$this->write_log( 'copy to blog id: ' . $site['blog_id'] );		
+	
+
+			        	/**
+			        	 * create post
+			        	 */
+	        			// switch to target site
+	                	switch_to_blog( $site['blog_id'] );
+	                	// create post
+						$copy_id = wp_insert_post( $post_data );
+						// switch back to source site
+						restore_current_blog();
 
 
+	                    /**
+	                     * set MultilingualPress relation
+	                     */
 			            // if MultilingualPress is present
 			            if( function_exists( 'mlp_get_linked_elements' ) ) {
 			            	// get existing relations
@@ -155,18 +169,8 @@ class HMNetworkAutoPost {
 
 			                // if there are no related posts
 			                if( !array_key_exists( $site['blog_id'], $relations ) ) {
-			        			$this->write_log( 'there is no connectio yet: ' . $site['blog_id'] );		
+			        			$this->write_log( 'there is no connectio yet: ' . $site['blog_id'] );				                    
 
-			        			// switch to target site
-			                	switch_to_blog( $site['blog_id'] );
-			                	// create post
-								$copy_id = wp_insert_post( $post_data );
-								// switch back to source site
-								restore_current_blog();
-
-			                    /**
-			                     * set MultilingualPress relation
-			                     */
 			                    if( $this->mpl_api_cache ) {            
 			                        $this->write_log( 'API cache found' );
 
@@ -180,53 +184,53 @@ class HMNetworkAutoPost {
 			                        );
 			                    }		
 
-
-			                    /**
-			                     * call custom action
-			                     */
-			                    do_action( 
-			                    	'hmnap/create_post',
-		                            $source_site_id,
-		                            $site['blog_id'],
-		                            $post_id,
-		                            $copy_id
-		                        );		
+			            	}
+			        	}
 
 
-			                    /**
-			                     * set thumbnail image
-			                     */
-		                        // if source post has thumbnail
-		                        if( $source_post_thumbnail_id = get_post_thumbnail_id( $post_id ) ) {
-		                        	$this->write_log( 'Thumbnail found' );
+	                    /**
+	                     * set thumbnail image
+	                     */
+                        // if source post has thumbnail
+                        if( $source_post_thumbnail_id = get_post_thumbnail_id( $post_id ) ) {
+                        	$this->write_log( 'Thumbnail found' );
 
-		                        	// check for relations of thumbnail
-		                        	$thumbnail_relations = mlp_get_linked_elements( $source_post_thumbnail_id, '', $source_site_id );
-		                        	$this->write_log( $thumbnail_relations );
+                        	// check for relations of thumbnail
+                        	$thumbnail_relations = mlp_get_linked_elements( $source_post_thumbnail_id, '', $source_site_id );
+                        	$this->write_log( $thumbnail_relations );
 
-									// thumbnail relations exists
-									if( array_key_exists( $site['blog_id'], $thumbnail_relations ) ) {
-			                        	$this->write_log( 'Thumbnail relation found: ' . $thumbnail_relations[$site['blog_id']] );
-		
-					        			// switch to target site
-					                	switch_to_blog( $site['blog_id'] );			                        	
-										// set thumbnail on target site
-			                        	update_post_meta( $copy_id, '_thumbnail_id', $thumbnail_relations[$site['blog_id']] );
-										// switch back to source site
-										restore_current_blog();			                        
-			                        }
+							// thumbnail relations exists
+							if( array_key_exists( $site['blog_id'], $thumbnail_relations ) ) {
+	                        	$this->write_log( 'Thumbnail relation found: ' . $thumbnail_relations[$site['blog_id']] );
 
-		                        }
+			        			// switch to target site
+			                	switch_to_blog( $site['blog_id'] );			                        	
+								// set thumbnail on target site
+	                        	update_post_meta( $copy_id, '_thumbnail_id', $thumbnail_relations[$site['blog_id']] );
+								// switch back to source site
+								restore_current_blog();			                        
+	                        }
+
+                        }
 
 
-		                        /**
-		                         * TODO 
-		                         * Find all related uploads of the source post's uploads
-		                         * and set their post parent to the created post
-		                         */
-			                }
-			            }
-			        }
+	                    /**
+	                     * call custom action
+	                     */
+	                    do_action( 
+	                    	'hmnap/create_post',
+                            $source_site_id,
+                            $site['blog_id'],
+                            $post_id,
+                            $copy_id
+                        );		
+
+                        /**
+                         * TODO 
+                         * Find all related uploads of the source post's uploads
+                         * and set their post parent to the created post
+                         */
+	                }
 			    }
 			}
 		}
@@ -266,6 +270,7 @@ class HMNetworkAutoPost {
 
     /**
      * Renders the meta box.
+     * @param WP_Post $post post
      */
     public function render_metabox( $post ) {
 
@@ -290,18 +295,22 @@ class HMNetworkAutoPost {
 						echo '</a>';
 						echo '</h3>';
 						echo '<h4 class="info">';
-						// echo get_bloginfo( 'name' );
 						if( array_key_exists( $site_id, $language_titles ) ) {
 							echo $language_titles[ $site_id ];
 						}
 						echo '</h4>';
-						// echo '<a href="' . get_edit_post_link( $relation ) . '" class="button">';
-						// echo __( 'Edit', 'hm-network-auto-post' );
-						// echo '</a>';
 						echo '</div>';
+
 						restore_current_blog();
 					}
 				}
+			} else {
+				echo '<h3>';
+				echo __( 'No translations yet', 'hm-network-auto-post' );
+				echo '</h3>';
+				echo '<p>';
+				echo __( 'Translation posts are automatically created when this post is published.', 'hm-network-auto-post' );
+				echo '</p>';				
 			}
 		}
     }    
@@ -309,7 +318,6 @@ class HMNetworkAutoPost {
 
 	/**
 	 * Register admin CSS
-	 *
 	 */
 	public function admin_css() {
 	    wp_register_style( 'hmnap-admin-style', WP_PLUGIN_URL . '/hm-network-auto-post/css/hm-network-auto-post-admin.css' );
