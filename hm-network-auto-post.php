@@ -3,7 +3,7 @@
 /*
 Plugin Name: HM Network Auto Post
 Version: 0.1
-Description: Activate on default language...
+Description: Automatically create post copies on remote sites in the same network and create MLP relations when possible.
 Plugin URI:
 Author: Martin Wecke, HATSUMATSU
 Author URI: http://hatsumatsu.de/
@@ -25,13 +25,14 @@ class HMNetworkAutoPost {
 		add_action( 'after_setup_theme', array( $this, 'load_settings' ) );
 
 		// attach publish action 
-		// use save_post to include ACF fields which fire late
+		// use `save_post` to include ACF fields which are available later than `pulbish_post` 
 		add_action( 'save_post', array( $this, 'copy_post' ), 100, 2 );			
 
 		// init meta box
 		add_action( 'load-post.php', array( $this, 'init_metabox' ) );
 		add_action( 'load-post-new.php', array( $this, 'init_metabox' ) );
 
+		// add admin CSS
 		add_action( 'admin_enqueue_scripts', array( $this, 'admin_css' ) );
 
 		// default settings
@@ -72,13 +73,6 @@ class HMNetworkAutoPost {
 	 * @param bool $update Whether this is an existing post being updated or not.
 	 */
 	public function copy_post( $post_id, $post ) {
-		$this->write_log( 'save_post' );
-		$this->write_log( $post_id );
-		$this->write_log( $post->ID );
-		$this->write_log( $post->post_status );
-		$this->write_log( $post->post_title );
-		$this->write_log( $post->post_content );
-
 		// return if post is post revisions
 		if( wp_is_post_revision( $post_id ) ) {
 			$this->write_log( 'ignore revision' );
@@ -91,13 +85,17 @@ class HMNetworkAutoPost {
 			return;
 		}
 
+		$this->write_log( 'save_post' );
+		$this->write_log( $post_id );
+		$this->write_log( $post->post_title );		
+
 		// if post type is okay
 		if( array_key_exists( $post->post_type, $this->settings ) ) {
-			$this->write_log( 'post type is okay' );		
+			$this->write_log( 'post type is within current settings' );		
 
 			// post is not synced yet
 			if( !get_post_meta( $post_id, '_network-auto-post--synced', true ) ) {
-				$this->write_log( 'post is not yet synced' );		
+				$this->write_log( 'post is not yet synced by HMNAP' );		
 
 				$post_status = ( $this->settings[$post->post_type]['post_status'] ) ? $this->settings[$post->post_type]['post_status'] : 'draft';
 
@@ -144,7 +142,7 @@ class HMNetworkAutoPost {
 			    foreach( $sites as $site ) {
 			        // ... that is not the source site
 			        if( $site['blog_id'] != $source_site_id ) {
-			        	$this->write_log( 'copy to blog id: ' . $site['blog_id'] );		
+			        	$this->write_log( 'Copy post to remote site id: ' . $site['blog_id'] );		
 	
 
 			        	/**
@@ -169,7 +167,7 @@ class HMNetworkAutoPost {
 
 			                // if there are no related posts
 			                if( !array_key_exists( $site['blog_id'], $relations ) ) {
-			        			$this->write_log( 'there is no connectio yet: ' . $site['blog_id'] );				                    
+			        			$this->write_log( 'There is no MLP relation yet in th site: ' . $site['blog_id'] );				                    
 
 			                    if( $this->mpl_api_cache ) {            
 			                        $this->write_log( 'API cache found' );
@@ -225,11 +223,83 @@ class HMNetworkAutoPost {
                             $copy_id
                         );		
 
+
+                        /**
+                         * TODO 
+                         * Set tags, cetagories and custom taxonomies
+                         * Use get_object_taxonomies() on post_type
+                         */
+                        if( function_exists( 'mlp_get_linked_elements' ) ) {
+	                        if( $taxonomies = get_object_taxonomies( $post->post_type, 'names' ) ) {
+	                        	foreach( $taxonomies as $taxonomy ) {
+	                        		if( $terms = get_the_terms( $post, $taxonomy ) ) {
+	                        			$this->write_log( $terms );
+
+	                        			$target_terms = array();
+
+	                        			foreach( $terms as $term ) {
+	                        				// https://github.com/inpsyde/multilingual-press/issues/199
+	                        				$content_relations = $this->mpl_api_cache->get( 'content_relations' );
+	                        				$term_relations = $content_relations->get_relations( $source_site_id, $term->term_id, 'term' );
+
+	                        				$this->write_log( 'related terms: ' );
+	                        				$this->write_log( $term_relations );
+
+	                        				if( array_key_exists( $site['blog_id'], $term_relations ) ) {
+	                        					$target_terms[] = $term_relations[$site['blog_id']];
+	                        				}
+	                        			}
+
+	                        			if( $target_terms ) {
+                        					switch_to_blog( $site['blog_id'] );
+                        					wp_set_post_terms( $copy_id, $target_terms, $taxonomy, false );
+                        					restore_current_blog();	                        			
+                        				}
+	                        		}
+	                        	}
+	                        }
+	                    }
+
+
                         /**
                          * TODO 
                          * Find all related uploads of the source post's uploads
                          * and set their post parent to the created post
                          */
+                        if( function_exists( 'mlp_get_linked_elements' ) ) {
+                        	$attachments = get_posts(
+                        		array(
+                        			'post_type' 		=> 'attachment',
+                        			'posts_per_page' 	=> -1,
+                        			'post_parent' 		=> $post->ID
+                        		)
+                        	);
+
+                        	if( $attachments ) {
+                        		foreach( $attachments as $attachment ) {
+	                        		$attachment_relations = mlp_get_linked_elements( $attachment->ID, '', $source_site_id );
+	                        		if( array_key_exists( $site['blog_id'], $attachment_relations ) ) {
+	                        			$this->write_log( 'found unattached remote attachments...' );
+	                        			$this->write_log( $attachment_relations );
+
+	                        			switch_to_blog( $site['blog_id'] );
+	                        			if( $target_attachment = get_post( $attachment_relations[$site['blog_id']] ) ) {
+	                        				$this->write_log( $target_attachment );
+
+	                        				if( !$target_attachment->post_parent ) {
+	                        					$target_attachment_date = array(
+	                        						'ID' 			=> $target_attachment->ID,
+													'post_parent' 	=> $copy_id
+												);
+
+	                        					wp_update_post( $target_attachment_date );
+	                        				}
+	                        			}
+	                        			restore_current_blog();
+	                        		}
+                        		}
+                        	}
+						}        
 	                }
 			    }
 			}
@@ -309,7 +379,7 @@ class HMNetworkAutoPost {
 				echo __( 'No translations yet', 'hm-network-auto-post' );
 				echo '</h3>';
 				echo '<p>';
-				echo __( 'Translation posts are automatically created when this post is published.', 'hm-network-auto-post' );
+				echo __( 'Translations are automatically created when this post is published.', 'hm-network-auto-post' );
 				echo '</p>';				
 			}
 		}
@@ -332,7 +402,7 @@ class HMNetworkAutoPost {
 	public function write_log( $log )  {
 	    if( true === WP_DEBUG ) {
 	        if( is_array( $log ) || is_object( $log ) ) {
-	            error_log( print_r( 'hmnap: ' . $log . "\n", true ), 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
+	            error_log( 'hmnap: ' . print_r( $log, true ) . "\n", 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
 	        } else {
 	            error_log( 'hmnap: ' . $log . "\n", 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
 	        }
