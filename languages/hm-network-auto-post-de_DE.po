@@ -1,8 +1,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: hm-network-auto-post\n"
-"POT-Creation-Date: 2016-04-08 20:03+0100\n"
-"PO-Revision-Date: 2016-04-08 20:03+0100\n"
+"POT-Creation-Date: 2016-04-12 12:37+0100\n"
+"PO-Revision-Date: 2016-04-12 14:03+0100\n"
 "Last-Translator: hatsumatsu <mail@hatsumatsu.de>\n"
 "Language-Team: \n"
 "Language: de_DE\n"
@@ -16,6 +16,14 @@ msgstr ""
 "X-Poedit-SearchPath-0: .\n"
 "X-Poedit-SearchPath-1: ..\n"
 
-#: ../hm-network-auto-post.php:249
+#: ../hm-network-auto-post.php:331
 msgid "Translations"
 msgstr "Übersetzungen"
+
+#: ../hm-network-auto-post.php:379
+msgid "No translations yet"
+msgstr "Es gibt noch keine Übersetzungen."
+
+#: ../hm-network-auto-post.php:382
+msgid "Translations are automatically created when this post is published."
+msgstr "Übersetzungen werden automatisch erstellt, sobald dieser Beitrag veröffentlich wird."
