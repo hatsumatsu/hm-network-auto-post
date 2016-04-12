@@ -16,7 +16,7 @@ class HMNetworkAutoPost {
 
 	public function __construct() {
 		// i11n
-		load_plugin_textdomain( 'hm-network-auto-post' );		
+		add_action( 'init', array( $this, 'load_i88n' ) );
 
 		// cache MPL API
 		add_action( 'inpsyde_mlp_loaded', array( $this, 'cache_mlp_api' ) );
@@ -45,6 +45,14 @@ class HMNetworkAutoPost {
 				)
 			)
 		);
+	}
+
+
+	/**
+	 * Load i88n
+	 */
+	public function load_i88n() {
+		load_plugin_textdomain( 'hm-network-auto-post', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );				
 	}
 
 
@@ -93,8 +101,15 @@ class HMNetworkAutoPost {
 		if( array_key_exists( $post->post_type, $this->settings ) ) {
 			$this->write_log( 'post type is within current settings' );		
 
-			// post is not synced yet
-			if( !get_post_meta( $post_id, '_network-auto-post--synced', true ) ) {
+		    $sites = wp_get_sites();
+			$source_site_id = get_current_blog_id();
+
+			// get existing relations
+            $relations = mlp_get_linked_elements( $post_id, '', $source_site_id );
+            $this->write_log( $relations );
+
+			// post is not synced / MLP related yet
+			if( !get_post_meta( $post_id, '_network-auto-post--synced', true ) && !$relations ) {
 				$this->write_log( 'post is not yet synced by HMNAP' );		
 
 				$post_status = ( $this->settings[$post->post_type]['post_status'] ) ? $this->settings[$post->post_type]['post_status'] : 'draft';
@@ -135,9 +150,6 @@ class HMNetworkAutoPost {
 
 				$this->write_log( $post_data );		
 
-			    $sites = wp_get_sites();
-				$source_site_id = get_current_blog_id();
-
 			    // each site... 
 			    foreach( $sites as $site ) {
 			        // ... that is not the source site
@@ -161,10 +173,6 @@ class HMNetworkAutoPost {
 	                     */
 			            // if MultilingualPress is present
 			            if( function_exists( 'mlp_get_linked_elements' ) ) {
-			            	// get existing relations
-			                $relations = mlp_get_linked_elements( $post_id, '', $source_site_id );
-			                $this->write_log( $relations );
-
 			                // if there are no related posts
 			                if( !array_key_exists( $site['blog_id'], $relations ) ) {
 			        			$this->write_log( 'There is no MLP relation yet in th site: ' . $site['blog_id'] );				                    
