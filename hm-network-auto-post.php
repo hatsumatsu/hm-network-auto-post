@@ -7,6 +7,8 @@ Description: Automatically create post copies on remote sites in the same networ
 Plugin URI:
 Author: Martin Wecke, HATSUMATSU
 Author URI: http://hatsumatsu.de/
+GitHub Plugin URI: https://github.com/hatsumatsu/hm-network-auto-post
+GitHub Branch:     releases
 */
 
 
