@@ -8,7 +8,7 @@ Plugin URI:
 Author: Martin Wecke, HATSUMATSU
 Author URI: http://hatsumatsu.de/
 GitHub Plugin URI: https://github.com/hatsumatsu/hm-network-auto-post
-GitHub Branch:     master
+GitHub Branch: master
 */
 
 
@@ -54,7 +54,7 @@ class HMNetworkAutoPost {
 	 * Load i88n
 	 */
 	public function load_i88n() {
-		load_plugin_textdomain( 'hm-network-auto-post', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );				
+		load_plugin_textdomain( 'hm-network-auto-post', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );	
 	}
 
 
@@ -62,34 +62,34 @@ class HMNetworkAutoPost {
 	 * Load settings from filter 'hmnap/settings'
 	 */
 	public function load_settings() {
-		$this->settings = apply_filters( 'hmnap/settings', $this->settings );			
+		$this->settings = apply_filters( 'hmnap/settings', $this->settings );
 	}
 
 
 	/**
-	 * Cache MultillingualPress API
+	 * Cache MultilingualPress API
 	 */
 	public function cache_mlp_api( $data ) {
-	    $this->write_log( 'inpsyde_mlp_loaded' );
+		$this->write_log( 'inpsyde_mlp_loaded' );
 
-	    $this->mpl_api_cache = $data;	
+		$this->mpl_api_cache = $data;
 	}
 
 
 	/**
 	 * Copy posts 
-	 * @param int $post_id source post ID
-	 * @param WP_Post $post source post
+	 * @param int $post_id Source post ID
+	 * @param WP_Post $post Source post
 	 * @param bool $update Whether this is an existing post being updated or not.
 	 */
 	public function copy_post( $post_id, $post ) {
-		// return if post is post revisions
+		// quit if post is post revisions
 		if( wp_is_post_revision( $post_id ) ) {
 			$this->write_log( 'ignore revision' );
 			return;
 		}
 
-		// return if post is trash or auto draft
+		// quit if post is trash or auto draft
 		if( $post->post_status == 'trash' || $post->post_status == 'draft' || $post->post_status == 'auto-draft' ) {
 			$this->write_log( 'ignore auto draft or trash' );
 			return;
@@ -97,18 +97,18 @@ class HMNetworkAutoPost {
 
 		$this->write_log( 'save_post' );
 		$this->write_log( $post_id );
-		$this->write_log( $post->post_title );		
+		$this->write_log( $post->post_title );
 
-		// if post type is okay
+		// if post type is within settings
 		if( array_key_exists( $post->post_type, $this->settings ) ) {
-			$this->write_log( 'post type is within current settings' );		
+			$this->write_log( 'post type is within current settings' );
 
-		    $sites = wp_get_sites();
+			$sites = wp_get_sites();
 			$source_site_id = get_current_blog_id();
 
-			// get existing relations
-            $relations = mlp_get_linked_elements( $post_id, '', $source_site_id );
-            $this->write_log( $relations );
+			// get existing MLP relations
+			$relations = mlp_get_linked_elements( $post_id, '', $source_site_id );
+			$this->write_log( $relations );
 
 			// post is not synced / MLP related yet
 			if( !get_post_meta( $post_id, '_network-auto-post--synced', true ) && !$relations ) {
@@ -136,6 +136,7 @@ class HMNetworkAutoPost {
 					'_network-auto-post--synced' => 1
 				);
 
+				// copy all meta fields defined in settings
 				if( $this->settings[$post->post_type]['meta'] ) {
 					foreach( $this->settings[$post->post_type]['meta'] as $key ) {
 						$value = get_post_meta( $post_id, $key, true );
@@ -150,212 +151,207 @@ class HMNetworkAutoPost {
 				// flag source as synced
 				update_post_meta( $post_id, '_network-auto-post--synced', 1 );
 
-				$this->write_log( $post_data );		
+				$this->write_log( $post_data );
 
-			    // each site... 
-			    foreach( $sites as $site ) {
-			        // ... that is not the source site
-			        if( $site['blog_id'] != $source_site_id ) {
-			        	$this->write_log( 'Copy post to remote site id: ' . $site['blog_id'] );		
+				// each site... 
+				foreach( $sites as $site ) {
+					// ... that is not the source site
+					if( $site['blog_id'] != $source_site_id ) {
+						$this->write_log( 'Copy post to remote site id: ' . $site['blog_id'] );
 	
 
-			        	/**
-			        	 * create post
-			        	 */
-	        			// switch to target site
-	                	switch_to_blog( $site['blog_id'] );
-	                	// create post
+						/**
+						 * Create post
+						 */
+						// switch to target site
+						switch_to_blog( $site['blog_id'] );
+						// create post
 						$copy_id = wp_insert_post( $post_data );
 						// switch back to source site
 						restore_current_blog();
 
 
-	                    /**
-	                     * set MultilingualPress relation
-	                     */
-			            // if MultilingualPress is present
-			            if( function_exists( 'mlp_get_linked_elements' ) ) {
-			                // if there are no related posts
-			                if( !array_key_exists( $site['blog_id'], $relations ) ) {
-			        			$this->write_log( 'There is no MLP relation yet in th site: ' . $site['blog_id'] );				                    
+						/**
+						 * Set MultilingualPress relation
+						 */
+						// if MultilingualPress is present
+						if( function_exists( 'mlp_get_linked_elements' ) ) {
+							// if there are no MLP related posts
+							if( !array_key_exists( $site['blog_id'], $relations ) ) {
+								$this->write_log( 'There is no MLP relation yet in site: ' . $site['blog_id'] );
 
-			                    if( $this->mpl_api_cache ) {            
-			                        $this->write_log( 'API cache found' );
+								if( $this->mpl_api_cache ) {            
+									$relations = $this->mpl_api_cache->get( 'content_relations' );
 
-			                        $relations = $this->mpl_api_cache->get( 'content_relations' );
-
-			                        $relations->set_relation(
-			                            $source_site_id,
-			                            $site['blog_id'],
-			                            $post_id,
-			                            $copy_id
-			                        );
-			                    }		
-
-			            	}
-			        	}
+									$relations->set_relation(
+										$source_site_id,
+										$site['blog_id'],
+										$post_id,
+										$copy_id
+									);
+								}
+							}
+						}
 
 
-	                    /**
-	                     * set thumbnail image
-	                     */
-                        // if source post has thumbnail
-                        if( $source_post_thumbnail_id = get_post_thumbnail_id( $post_id ) ) {
-                        	$this->write_log( 'Thumbnail found' );
+						/**
+						 * Set thumbnail image
+						 */
+						// if source post has thumbnail
+						if( $source_post_thumbnail_id = get_post_thumbnail_id( $post_id ) ) {
+							$this->write_log( 'Thumbnail found' );
 
-                        	// check for relations of thumbnail
-                        	$thumbnail_relations = mlp_get_linked_elements( $source_post_thumbnail_id, '', $source_site_id );
-                        	$this->write_log( $thumbnail_relations );
-
-							// thumbnail relations exists
+							// check for the thumbnail's MLP relations
+							$thumbnail_relations = mlp_get_linked_elements( $source_post_thumbnail_id, '', $source_site_id );
 							if( array_key_exists( $site['blog_id'], $thumbnail_relations ) ) {
-	                        	$this->write_log( 'Thumbnail relation found: ' . $thumbnail_relations[$site['blog_id']] );
+								$this->write_log( 'Thumbnail relation found: ' . $thumbnail_relations[$site['blog_id']] );
 
-			        			// switch to target site
-			                	switch_to_blog( $site['blog_id'] );			                        	
+								// switch to target site
+								switch_to_blog( $site['blog_id'] );
 								// set thumbnail on target site
-	                        	update_post_meta( $copy_id, '_thumbnail_id', $thumbnail_relations[$site['blog_id']] );
+								update_post_meta( $copy_id, '_thumbnail_id', $thumbnail_relations[$site['blog_id']] );
 								// switch back to source site
-								restore_current_blog();			                        
-	                        }
+								restore_current_blog();
+							}
 
-                        }
-
-
-	                    /**
-	                     * call custom action
-	                     */
-	                    do_action( 
-	                    	'hmnap/create_post',
-                            $source_site_id,
-                            $site['blog_id'],
-                            $post_id,
-                            $copy_id
-                        );		
+						}
 
 
-                        /**
-                         * TODO 
-                         * Set tags, cetagories and custom taxonomies
-                         * Use get_object_taxonomies() on post_type
-                         */
-                        if( function_exists( 'mlp_get_linked_elements' ) ) {
-	                        if( $taxonomies = get_object_taxonomies( $post->post_type, 'names' ) ) {
-	                        	foreach( $taxonomies as $taxonomy ) {
-	                        		if( $terms = get_the_terms( $post, $taxonomy ) ) {
-	                        			$this->write_log( $terms );
-
-	                        			$target_terms = array();
-
-	                        			foreach( $terms as $term ) {
-	                        				// https://github.com/inpsyde/multilingual-press/issues/199
-	                        				$content_relations = $this->mpl_api_cache->get( 'content_relations' );
-	                        				$term_relations = $content_relations->get_relations( $source_site_id, $term->term_id, 'term' );
-
-	                        				$this->write_log( 'related terms: ' );
-	                        				$this->write_log( $term_relations );
-
-	                        				if( array_key_exists( $site['blog_id'], $term_relations ) ) {
-	                        					$target_terms[] = $term_relations[$site['blog_id']];
-	                        				}
-	                        			}
-
-	                        			if( $target_terms ) {
-                        					switch_to_blog( $site['blog_id'] );
-                        					wp_set_post_terms( $copy_id, $target_terms, $taxonomy, false );
-                        					restore_current_blog();	                        			
-                        				}
-	                        		}
-	                        	}
-	                        }
-	                    }
+						/**
+						 * Call custom action
+						 */
+						do_action( 
+							'hmnap/create_post',
+							$source_site_id,
+							$site['blog_id'],
+							$post_id,
+							$copy_id
+						);
 
 
-                        /**
-                         * TODO 
-                         * Find all related uploads of the source post's uploads
-                         * and set their post parent to the created post
-                         */
-                        if( function_exists( 'mlp_get_linked_elements' ) ) {
-                        	$attachments = get_posts(
-                        		array(
-                        			'post_type' 		=> 'attachment',
-                        			'posts_per_page' 	=> -1,
-                        			'post_parent' 		=> $post->ID
-                        		)
-                        	);
+						/**
+						 * Set tags, cetagories and custom taxonomies
+						 * Use get_object_taxonomies() on post_type
+						 */
+						if( function_exists( 'mlp_get_linked_elements' ) ) {
+							if( $taxonomies = get_object_taxonomies( $post->post_type, 'names' ) ) {
+								foreach( $taxonomies as $taxonomy ) {
+									if( $terms = get_the_terms( $post, $taxonomy ) ) {
+										$this->write_log( $terms );
 
-                        	if( $attachments ) {
-                        		foreach( $attachments as $attachment ) {
-	                        		$attachment_relations = mlp_get_linked_elements( $attachment->ID, '', $source_site_id );
-	                        		if( array_key_exists( $site['blog_id'], $attachment_relations ) ) {
-	                        			$this->write_log( 'found unattached remote attachments...' );
-	                        			$this->write_log( $attachment_relations );
+										$target_terms = array();
 
-	                        			switch_to_blog( $site['blog_id'] );
-	                        			if( $target_attachment = get_post( $attachment_relations[$site['blog_id']] ) ) {
-	                        				$this->write_log( $target_attachment );
+										foreach( $terms as $term ) {
+											// https://github.com/inpsyde/multilingual-press/issues/199
+											$content_relations = $this->mpl_api_cache->get( 'content_relations' );
+											$term_relations = $content_relations->get_relations( $source_site_id, $term->term_id, 'term' );
 
-	                        				if( !$target_attachment->post_parent ) {
-	                        					$target_attachment_date = array(
-	                        						'ID' 			=> $target_attachment->ID,
+											$this->write_log( 'related terms: ' );
+											$this->write_log( $term_relations );
+
+											if( array_key_exists( $site['blog_id'], $term_relations ) ) {
+												$target_terms[] = $term_relations[$site['blog_id']];
+											}
+										}
+
+										if( $target_terms ) {
+											// switch to target site
+											switch_to_blog( $site['blog_id'] );
+											// set terms
+											wp_set_post_terms( $copy_id, $target_terms, $taxonomy, false );
+											// switch back to source site
+											restore_current_blog();
+										}
+									}
+								}
+							}
+						}
+
+
+						/**
+						 * Find all MLP related uploads of the source post's uploads
+						 * and set their post parent to the created post
+						 */
+						if( function_exists( 'mlp_get_linked_elements' ) ) {
+							$attachments = get_posts(
+								array(
+									'post_type' 		=> 'attachment',
+									'posts_per_page' 	=> -1,
+									'post_parent' 		=> $post->ID
+								)
+							);
+
+							if( $attachments ) {
+								foreach( $attachments as $attachment ) {
+									$attachment_relations = mlp_get_linked_elements( $attachment->ID, '', $source_site_id );
+									if( array_key_exists( $site['blog_id'], $attachment_relations ) ) {
+										// switch to target site
+										switch_to_blog( $site['blog_id'] );
+										// set attachments' post parent
+										if( $target_attachment = get_post( $attachment_relations[$site['blog_id']] ) ) {
+											$this->write_log( $target_attachment );
+
+											if( !$target_attachment->post_parent ) {
+												$target_attachment_data = array(
+													'ID' 			=> $target_attachment->ID,
 													'post_parent' 	=> $copy_id
 												);
 
-	                        					wp_update_post( $target_attachment_date );
-	                        				}
-	                        			}
-	                        			restore_current_blog();
-	                        		}
-                        		}
-                        	}
-						}        
-	                }
-			    }
+												wp_update_post( $target_attachment_data );
+											}
+										}
+										// switch back to source post
+										restore_current_blog();
+									}
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 	}
 
 
-    /**
-     * Meta box initialization.
-     */
-    public function init_metabox() {
-        add_action( 'add_meta_boxes', array( $this, 'add_metabox' ) );
-    }		
+	/**
+	 * Meta box initialization.
+	 */
+	public function init_metabox() {
+		add_action( 'add_meta_boxes', array( $this, 'add_metabox' ) );
+	}		
 
 
-    /**
-     * Adds the meta box.
-     */
-    public function add_metabox() {
-    	// if MultilingualPress is present
-    	if( function_exists( 'mlp_get_linked_elements' ) ) {
-	    	$screens = array();
-	    	foreach( $this->settings as $post_type => $settings ) {
-	    		$screens[] = $post_type;
-	    	}
+	/**
+	 * Adds the meta box.
+	 */
+	public function add_metabox() {
+		// if MultilingualPress is present
+		if( function_exists( 'mlp_get_linked_elements' ) ) {
+			$screens = array();
+			foreach( $this->settings as $post_type => $settings ) {
+				$screens[] = $post_type;
+			}
 
-	        add_meta_box(
-	            'hm-network-auto-post',
-	            __( 'Translations', 'hm-network-auto-post' ),
-	            array( $this, 'render_metabox' ),
-	            $screens,
-	            'advanced',
-	            'default'
-	        );
-	    }
-    }
+			add_meta_box(
+				'hm-network-auto-post',
+				__( 'Translations', 'hm-network-auto-post' ),
+				array( $this, 'render_metabox' ),
+				$screens,
+				'advanced',
+				'default'
+			);
+		}
+	}
 
 
-    /**
-     * Renders the meta box.
-     * @param WP_Post $post post
-     */
-    public function render_metabox( $post ) {
+	/**
+	 * Renders the meta box.
+	 * @param WP_Post $post post
+	 */
+	public function render_metabox( $post ) {
 
 		if( function_exists( 'mlp_get_linked_elements' ) ) {
-		    $sites = wp_get_sites();
+			$sites = wp_get_sites();
 			$source_site_id = get_current_blog_id();
 
 			// get existing relations
@@ -393,15 +389,15 @@ class HMNetworkAutoPost {
 				echo '</p>';				
 			}
 		}
-    }    
+	}
 
 
 	/**
 	 * Register admin CSS
 	 */
 	public function admin_css() {
-	    wp_register_style( 'hmnap-admin-style', WP_PLUGIN_URL . '/hm-network-auto-post/css/hm-network-auto-post-admin.css' );
-	    wp_enqueue_style( 'hmnap-admin-style' );
+		wp_register_style( 'hmnap-admin-style', WP_PLUGIN_URL . '/hm-network-auto-post/css/hm-network-auto-post-admin.css' );
+		wp_enqueue_style( 'hmnap-admin-style' );
 	} 
 
 
@@ -410,13 +406,13 @@ class HMNetworkAutoPost {
 	 * @param  string|array $log 
 	 */
 	public function write_log( $log )  {
-	    if( true === WP_DEBUG ) {
-	        if( is_array( $log ) || is_object( $log ) ) {
-	            error_log( 'hmnap: ' . print_r( $log, true ) . "\n", 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
-	        } else {
-	            error_log( 'hmnap: ' . $log . "\n", 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
-	        }
-	    }
+		if( true === WP_DEBUG ) {
+			if( is_array( $log ) || is_object( $log ) ) {
+				error_log( 'hmnap: ' . print_r( $log, true ) . "\n", 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
+			} else {
+				error_log( 'hmnap: ' . $log . "\n", 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
+			}
+		}
 	}
 }
 
