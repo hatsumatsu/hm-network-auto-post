@@ -2,7 +2,7 @@
 
 /*
 Plugin Name: HM Network Auto Post
-Version: 0.1
+Version: 0.11
 Description: Automatically create post copies on remote sites in the same network and create MLP relations when possible.
 Plugin URI:
 Author: Martin Wecke, HATSUMATSU
