@@ -144,7 +144,7 @@ class HMNetworkAutoPost {
 							$meta[$key] = $value;
 						}
 					}
-				}
+				}			
 
 				$post_data['meta_input'] = $meta;
 
@@ -306,6 +306,29 @@ class HMNetworkAutoPost {
 								}
 							}
 						}
+
+
+						/**
+						 * Meta relations:
+						 * Copy all meta fields defined in settings
+						 * that are post relations
+						 */
+						if( $this->settings[$post->post_type]['meta-relations'] ) {
+							foreach( $this->settings[$post->post_type]['meta-relations'] as $key ) {
+								$value = get_post_meta( $post_id, $key, true );
+								if( $value ) {
+									$meta_relations = mlp_get_linked_elements( $value, '', $source_site_id );
+									if( array_key_exists( $site['blog_id'], $meta_relations ) ) {
+										// switch to target site
+										switch_to_blog( $site['blog_id'] );	
+										// update meta								
+										update_post_meta( $copy_id, $key, $meta_relations[$site['blog_id']] );								
+										// switch back to source post
+										restore_current_blog();
+									}
+								}
+							}
+						}	
 					}
 				}
 			}
