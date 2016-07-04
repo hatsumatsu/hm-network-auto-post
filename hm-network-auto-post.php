@@ -44,7 +44,9 @@ class HMNetworkAutoPost {
 				'post_thumbnail' 	=> true,
 				'meta' 				=> array(
 					'custom'
-				)
+				),
+				'meta-relations' => array(),
+				'permanent' => array()
 			)
 		);
 	}
@@ -70,7 +72,7 @@ class HMNetworkAutoPost {
 	 * Cache MultilingualPress API
 	 */
 	public function cache_mlp_api( $data ) {
-		$this->write_log( 'inpsyde_mlp_loaded' );
+		// $this->write_log( 'inpsyde_mlp_loaded' );
 
 		$this->mpl_api_cache = $data;
 	}
@@ -99,145 +101,180 @@ class HMNetworkAutoPost {
 		$this->write_log( 'save_post' );
 		$this->write_log( $source_post_id );
 		$this->write_log( $post->post_title );
+		$this->write_log( $post->post_type );
 
 		// quit if post type is not within settings
-		if( array_key_exists( $post->post_type, $this->settings ) ) {
+		if( !array_key_exists( $post->post_type, $this->settings ) ) {
 			return;
 		}
-		
+
 		$this->write_log( 'post type is within current settings' );
 
 		$sites = wp_get_sites();
 		$source_site_id = get_current_blog_id();
 
 		// get existing MLP relations
+		// Array( [site_id] => [post_id] ) including source site
 		$relations = mlp_get_linked_elements( $source_post_id, '', $source_site_id );
 		$this->write_log( $relations );
-
-		// post is not synced / MLP related yet
-		if( !get_post_meta( $source_post_id, '_network-auto-post--synced', true ) && !$relations ) {
-			$this->write_log( 'post is not yet synced by HMNAP' );		
-
-			$post_status = ( $this->settings[$post->post_type]['post_status'] ) ? $this->settings[$post->post_type]['post_status'] : 'draft';
-
-			$post_data = array(
-				'ID' 				=> 0,
-				'post_title' 		=> $post->post_title,
-				'post_content' 		=> $post->post_content,
-				'post_date' 		=> $post->post_date,
-				'post_modified' 	=> $post->post_modified,
-				'post_modified_gmt' => $post->post_modified_gmt,
-				'post_status' 		=> $post_status,
-				'post_author' 		=> $post->post_author,
-				'post_excerpt'  	=> $post->post_excerpt,
-				'post_type' 		=> $post->post_type,
-				'post_name' 		=> $post->post_name
-			);
-
-			// add meta data
-			// flag copy as synced
-			$meta = array(
-				'_network-auto-post--synced' => 1
-			);
-
-			// copy all meta fields defined in settings
-			if( $this->settings[$post->post_type]['meta'] ) {
-				foreach( $this->settings[$post->post_type]['meta'] as $key ) {
-					$value = get_post_meta( $source_post_id, $key, true );
-					if( $value ) {
-						$meta[$key] = $value;
-					}
-				}
-			}			
-
-			$post_data['meta_input'] = $meta;
-
-			// flag source as synced
-			update_post_meta( $source_post_id, '_network-auto-post--synced', 1 );
-
-			$this->write_log( $post_data );
-
-			// each site... 
-			foreach( $sites as $site ) {
-				// ... that is not the source site
-				if( $site['blog_id'] != $source_site_id ) {
-					$this->write_log( 'Copy post to remote site id: ' . $site['blog_id'] );
+		
 
 
-					/**
-					 * Create post
-					 */
-					// switch to target site
-					switch_to_blog( $site['blog_id'] );
-					// create post
-					$target_post_id = wp_insert_post( $post_data );
-					// switch back to source site
-					restore_current_blog();
+		// if( !get_post_meta( $source_post_id, '_network-auto-post--synced', true ) && !$relations ) {
 
+		// flag source as synced
+		update_post_meta( $source_post_id, '_network-auto-post--synced', 1 );
 
-					/**
-					 * Set MultilingualPress relation
-					 */
-					// if MultilingualPress is present
-					if( function_exists( 'mlp_get_linked_elements' ) ) {
-						// if there are no MLP related posts
-						if( !array_key_exists( $site['blog_id'], $relations ) ) {
-							$this->write_log( 'There is no MLP relation yet in site: ' . $site['blog_id'] );
+		$post_status = ( $this->settings[$post->post_type]['post_status'] ) ? $this->settings[$post->post_type]['post_status'] : 'draft';
+		$post_data = array(
+			'ID' 				=> 0,
+			'post_title' 		=> $post->post_title,
+			'post_content' 		=> $post->post_content,
+			'post_date' 		=> $post->post_date,
+			'post_modified' 	=> $post->post_modified,
+			'post_modified_gmt' => $post->post_modified_gmt,
+			'post_status' 		=> $post_status,
+			'post_author' 		=> $post->post_author,
+			'post_excerpt'  	=> $post->post_excerpt,
+			'post_type' 		=> $post->post_type,
+			'post_name' 		=> $post->post_name
+		);
 
-							if( $this->mpl_api_cache ) {            
-								$relations = $this->mpl_api_cache->get( 'content_relations' );
+		$this->write_log( $post_data );		
 
-								$relations->set_relation(
-									$source_site_id,
-									$site['blog_id'],
-									$source_post_id,
-									$target_post_id
-								);
-							}
-						}
-					}
-
-
-					/**
-					 * Set thumbnail image
-					 */
-					$this->setPostThumbnail( $source_site_id, $source_post_id, $site['blog_id'], $target_post_id );
-
-
-					/**
-					 * Set tags, cetagories and custom taxonomies
-					 * Use get_object_taxonomies() on post_type
-					 */
-					$this->setTaxonomies( $source_site_id, $source_post_id, $site['blog_id'], $target_post_id );
-
-
-					/**
-					 * Find all MLP related uploads of the source post's uploads
-					 * and set their post parent to the created post
-					 */
-					$this->setAttachments( $source_site_id, $source_post_id, $site['blog_id'], $target_post_id );
-
-
-					/**
-					 * Meta relations:
-					 * Copy all meta fields defined in settings
-					 * that are post relations
-					 */
-					$this->setMeta( $source_site_id, $source_post_id, $site['blog_id'], $target_post_id );
-
-
-					/**
-					 * Call custom action
-					 */
-					do_action( 
-						'hmnap/create_post',
-						$source_site_id,
-						$site['blog_id'],
-						$source_post_id,
-						$target_post_id
-					);						
+		// copy all meta fields defined in settings
+		// We need to do this ion addition to setMeta() because this data is not available earlier..
+		if( $this->settings[$post->post_type]['meta'] ) {
+			foreach( $this->settings[$post->post_type]['meta'] as $key ) {
+				$value = get_post_meta( $source_post_id, $key, true );
+				if( $value ) {
+					$meta[$key] = $value;
 				}
 			}
+		}			
+
+		$meta['_network-auto-post--synced'] = 1;
+		$post_data['meta_input'] = $meta;
+
+
+
+		// each site... 
+		foreach( $sites as $site ) {
+			// ... that is not the source site
+			if( $site['blog_id'] == $source_site_id ) {
+				continue;
+			}
+
+			$_new = false;
+
+			// no MLP related post exists in target site
+			if( !array_key_exists( $site['blog_id'], $relations ) ) {
+				$this->write_log( 'Copy post to remote site id: ' . $site['blog_id'] );
+
+				/**
+				 * Create post
+				 */
+				// remove save_post action to avoid infinite loop
+				remove_action( 'save_post', array( $this, 'copy_post' ), 100 );	
+				// switch to target site
+				switch_to_blog( $site['blog_id'] );
+				// create post
+				$target_post_id = wp_insert_post( $post_data );
+				// switch back to source site
+				restore_current_blog();
+				// re-add save_post action
+				add_action( 'save_post', array( $this, 'copy_post' ), 100, 2 );	
+
+
+
+				/**
+				 * Set MultilingualPress relation
+				 */
+				// if MultilingualPress is present
+				if( function_exists( 'mlp_get_linked_elements' ) ) {
+					// if there are no MLP related posts
+					if( !array_key_exists( $site['blog_id'], $relations ) ) {
+						$this->write_log( 'There is no MLP relation yet in site: ' . $site['blog_id'] );
+
+						if( $this->mpl_api_cache ) {            
+							$relations = $this->mpl_api_cache->get( 'content_relations' );
+
+							$relations->set_relation(
+								$source_site_id,
+								$site['blog_id'],
+								$source_post_id,
+								$target_post_id
+							);
+						}
+					}
+				}
+
+				$_new = true;
+
+				/**
+				 * Call custom action: create post
+				 */
+				do_action( 
+					'hmnap/create_post',
+					$source_site_id,
+					$site['blog_id'],
+					$source_post_id,
+					$target_post_id
+				);				
+			} else {
+				$target_post_id = $relations[$site['blog_id']];
+
+				// MLP related post on target site exists
+				$this->write_log( 'Related post does exist: ' . $site['blog_id'] . ':' . $relations[$site['blog_id']] );
+			}
+
+
+			/**
+			 * Set thumbnail image
+			 */
+			if( $_new || ( array_key_exists( 'post_thumbnail', $this->settings[$post->post_type]['permanent'] ) && $this->settings[$post->post_type]['permanent']['post_thumbnail'] ) ) {
+				$this->setPostThumbnail( $source_site_id, $source_post_id, $site['blog_id'], $target_post_id );
+			}
+
+
+			/**
+			 * Set tags, cetagories and custom taxonomies
+			 * Use get_object_taxonomies() on post_type
+			 */
+			if( $_new || ( array_key_exists( 'taxonomies', $this->settings[$post->post_type]['permanent'] ) && $this->settings[$post->post_type]['permanent']['taxonomies'] ) ) {
+				$this->setTaxonomies( $source_site_id, $source_post_id, $site['blog_id'], $target_post_id );
+			}
+
+
+			/**
+			 * Find all MLP related uploads of the source post's uploads
+			 * and set their post parent to the created post
+			 */
+			$this->setAttachments( $source_site_id, $source_post_id, $site['blog_id'], $target_post_id );
+
+
+			/**
+			 * Meta relations:
+			 * Copy all meta fields defined in settings
+			 * that are post relations
+			 */
+			if( $_new ) {
+				$this->setMeta( $source_site_id, $source_post_id, $site['blog_id'], $target_post_id );
+			} elseif( ( array_key_exists( 'meta', $this->settings[$post->post_type]['permanent'] ) && $this->settings[$post->post_type]['permanent']['meta'] ) || array_key_exists( 'meta-relations', $this->settings[$post->post_type]['permanent'] ) && $this->settings[$post->post_type]['permanent']['meta-relations'] ) {
+				$this->setMetaPermanent( $source_site_id, $source_post_id, $site['blog_id'], $target_post_id );
+			}
+
+
+			/**
+			 * Call custom action: save post
+			 */
+			do_action( 
+				'hmnap/save_post',
+				$source_site_id,
+				$site['blog_id'],
+				$source_post_id,
+				$target_post_id
+			);				
 		}
 	}
 
@@ -265,7 +302,21 @@ class HMNetworkAutoPost {
 				update_post_meta( $target_post_id, '_thumbnail_id', $thumbnail_relations[$target_site_id] );
 				// switch back to source site
 				restore_current_blog();
+			} else {
+				// switch to target site
+				switch_to_blog( $target_site_id );
+				// set thumbnail on target site
+				delete_post_meta( $target_post_id, '_thumbnail_id' );
+				// switch back to source site
+				restore_current_blog();				
 			}
+		} else {
+			// switch to target site
+			switch_to_blog( $target_site_id );
+			// set thumbnail on target site
+			delete_post_meta( $target_post_id, '_thumbnail_id' );
+			// switch back to source site
+			restore_current_blog();				
 		}
 	}
 
@@ -384,6 +435,76 @@ class HMNetworkAutoPost {
 			}
 		}			
 	}
+
+
+	/**
+	 * set meta fields of remote posts PERMANENTLY on every save_post
+	 * @param int $source_site_id site ID of source site
+	 * @param int $source_post_id post ID of source post
+	 * @param int $target_site_id site ID of target site
+	 * @param int $target_post_id post ID of target post
+	 */
+	public function setMetaPermanent( $source_site_id, $source_post_id, $target_site_id, $target_post_id ) {
+		$this->write_log( 'setMetaPermanent()' );
+		// regular meta
+		if( $this->settings[get_post_type( $source_post_id )]['permanent']['meta'] ) {	
+			$this->write_log( 'regular meta' );
+			$this->write_log( $this->settings[get_post_type( $source_post_id )]['permanent']['meta'] );
+			
+			foreach( $this->settings[get_post_type( $source_post_id )]['permanent']['meta'] as $key => $state ) {
+				$value = get_post_meta( $source_post_id, $key, true );
+				if( $value ) {		
+					$this->write_log( $key . ' => ' .  $value );
+
+					// switch to target site
+					switch_to_blog( $target_site_id );											
+					// update meta								
+					update_post_meta( $target_post_id, $key, $value );								
+					// switch back to source post
+					restore_current_blog();						
+				} else {
+					// switch to target site
+					switch_to_blog( $target_site_id );											
+					// update meta								
+					delete_post_meta( $target_post_id, $key );								
+					// switch back to source post
+					restore_current_blog();						
+				}
+			}		
+		}
+
+		// meta relations
+		if( $this->settings[get_post_type( $source_post_id )]['permanent']['meta-relations'] ) {
+			foreach( $this->settings[get_post_type( $source_post_id )]['permanent']['meta-relations'] as $key ) {
+				$value = get_post_meta( $source_post_id, $key, true );
+				if( $value ) {									
+					$meta_relations = mlp_get_linked_elements( $value, '', $source_site_id );
+					if( array_key_exists( $target_site_id, $meta_relations ) ) {
+						// switch to target site
+						switch_to_blog( $target_site_id );	
+						// update meta								
+						update_post_meta( $target_post_id, $key, $meta_relations[$target_site_id] );								
+						// switch back to source post
+						restore_current_blog();
+					} else {
+						// switch to target site
+						switch_to_blog( $target_site_id );											
+						// update meta								
+						delete_post_meta( $target_post_id, $key );								
+						// switch back to source post
+						restore_current_blog();							
+					}
+				} else {
+					// switch to target site
+					switch_to_blog( $target_site_id );											
+					// update meta								
+					delete_post_meta( $target_post_id, $key );								
+					// switch back to source post
+					restore_current_blog();						
+				}
+			}
+		}		
+	}	
 
 
 	/**
