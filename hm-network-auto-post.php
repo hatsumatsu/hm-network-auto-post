@@ -143,7 +143,8 @@ class HMNetworkAutoPost {
 		$this->write_log( $post_data );		
 
 		// copy all meta fields defined in settings
-		// We need to do this ion addition to setMeta() because this data is not available earlier..
+		// We need to do this ion addition to setMeta() because this data is not available earlier...
+		// TODO: move this to setMeta
 		if( $this->settings[$post->post_type]['meta'] ) {
 			foreach( $this->settings[$post->post_type]['meta'] as $key ) {
 				$value = get_post_meta( $source_post_id, $key, true );
@@ -412,6 +413,7 @@ class HMNetworkAutoPost {
 
 	/**
 	 * set meta fields of remote posts
+	 * TODO: splt into setMeta() and setMetaRelations()
 	 * @param int $source_site_id site ID of source site
 	 * @param int $source_post_id post ID of source post
 	 * @param int $target_site_id site ID of target site
