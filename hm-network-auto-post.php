@@ -2,11 +2,11 @@
 
 /*
 Plugin Name: HM Network Auto Post
-Version: 0.12
+Version: 0.13
 Description: Automatically creates post copies on remote sites in the same network and builds MLP relations when possible.
 Plugin URI:
-Author: Martin Wecke, HATSUMATSU
-Author URI: http://hatsumatsu.de/
+Author: Martin Wecke
+Author URI: http://martinwecke.de/
 GitHub Plugin URI: https://github.com/hatsumatsu/hm-network-auto-post
 GitHub Branch: master
 */
@@ -38,6 +38,17 @@ class HMNetworkAutoPost {
 		add_action( 'admin_enqueue_scripts', array( $this, 'adminCSS' ) );
 
 		// default settings
+		$this->settings = array(
+			'post' => array(
+				'post_status' 		=> 'publish',
+				'post_thumbnail' 	=> true,
+				'meta' 				=> array(
+					'custom'
+				),
+				'meta-relations' => array(),
+				'permanent' => array()
+			)
+		);		// default settings
 		$this->settings = array(
 			'post' => array(
 				'post_status' 		=> 'publish',
@@ -139,6 +150,22 @@ class HMNetworkAutoPost {
 
 
 			/**
+			 * Set title
+			 */
+			if( $_new || ( array_key_exists( 'post_title', $this->settings[$post->post_type]['permanent'] ) && $this->settings[$post->post_type]['permanent']['post_title'] ) ) {
+				$this->setPostTitle( $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+			}
+
+
+			/**
+			 * Set content
+			 */
+			if( $_new || ( array_key_exists( 'post_content', $this->settings[$post->post_type]['permanent'] ) && $this->settings[$post->post_type]['permanent']['post_content'] ) ) {
+				$this->setPostContent( $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+			}			
+
+
+			/**
 			 * Set thumbnail image
 			 */
 			if( $_new || ( array_key_exists( 'post_thumbnail', $this->settings[$post->post_type]['permanent'] ) && $this->settings[$post->post_type]['permanent']['post_thumbnail'] ) ) {
@@ -212,7 +239,6 @@ class HMNetworkAutoPost {
 		$post_data = array(
 			'ID' 				=> 0,
 			'post_title' 		=> $post->post_title,
-			'post_content' 		=> $post->post_content,
 			'post_date' 		=> $post->post_date,
 			'post_modified' 	=> $post->post_modified,
 			'post_modified_gmt' => $post->post_modified_gmt,
@@ -223,6 +249,9 @@ class HMNetworkAutoPost {
 			'post_name' 		=> $post->post_name
 		);
 
+		if( array_key_exists( 'post_content', $this->settings[$source_post->post_type] ) ) {
+			$post_data['post_content'] = $post->post_content;
+		}
 
 		// remove save_post action to avoid infinite loop
 		remove_action( 'save_post', array( $this, 'savePost' ), 100 );	
@@ -266,6 +295,70 @@ class HMNetworkAutoPost {
 
 		return $target_post_id;
 	}
+
+
+	/**
+	 * Set post title of remote post
+	 * @param int $source_site_id site ID of source site
+	 * @param int $source_post_id post ID of source post
+	 * @param int $target_site_id site ID of target site
+	 * @param int $target_post_id post ID of target post
+	 */
+	public function setPostTitle( $source_site_id, $source_post_id, $target_site_id, $target_post_id ) {
+		$source_post = get_post( $source_post_id );
+		if( !$source_post ) {
+			return;
+		}
+
+		$post_data = array(
+      		'ID'           => $target_post_id,
+      		'post_title'   => $source_post->post_title,
+      		'post_name'    => $source_post->post_name
+		);
+
+		// remove save_post action to avoid infinite loop
+		remove_action( 'save_post', array( $this, 'savePost' ), 100 );
+		// switch to target site
+		switch_to_blog( $target_site_id );
+		// update post data
+  		wp_update_post( $post_data );
+		// switch back to source site
+		restore_current_blog();
+		// re-add save_post action
+		add_action( 'save_post', array( $this, 'savePost' ), 100, 2 );
+	}
+
+
+	/**
+	 * Set post content of remote post
+	 * @param int $source_site_id site ID of source site
+	 * @param int $source_post_id post ID of source post
+	 * @param int $target_site_id site ID of target site
+	 * @param int $target_post_id post ID of target post
+	 */
+	public function setPostContent( $source_site_id, $source_post_id, $target_site_id, $target_post_id ) {
+		$source_post = get_post( $source_post_id );
+		if( !$source_post ) {
+			return;
+		}
+
+		$post_data = array(
+      		'ID'           => $target_post_id,
+      		'post_content' => $source_post->post_content,
+      		'post_excerpt' => $source_post->post_excerpt
+		);
+
+		// remove save_post action to avoid infinite loop
+		remove_action( 'save_post', array( $this, 'savePost' ), 100 );
+		// switch to target site
+		switch_to_blog( $target_site_id );
+		// update post data
+  		wp_update_post( $post_data );
+		// switch back to source site
+		restore_current_blog();
+		// re-add save_post action
+		add_action( 'save_post', array( $this, 'savePost' ), 100, 2 );		
+	}	
 
 
 	/**
