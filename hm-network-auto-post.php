@@ -2,7 +2,7 @@
 
 /*
 Plugin Name: HM Network Auto Post
-Version: 0.13
+Version: 0.14
 Description: Automatically creates post copies on remote sites in the same network and builds MLP relations when possible.
 Plugin URI:
 Author: Martin Wecke
@@ -43,18 +43,7 @@ class HMNetworkAutoPost {
 				'post_status' 		=> 'publish',
 				'post_thumbnail' 	=> true,
 				'meta' 				=> array(
-					'custom'
-				),
-				'meta-relations' => array(),
-				'permanent' => array()
-			)
-		);		// default settings
-		$this->settings = array(
-			'post' => array(
-				'post_status' 		=> 'publish',
-				'post_thumbnail' 	=> true,
-				'meta' 				=> array(
-					'custom'
+					'custom' => true
 				),
 				'meta-relations' => array(),
 				'permanent' => array()
@@ -93,10 +82,9 @@ class HMNetworkAutoPost {
 	 * @param WP_Post $post Source post
 	 * @param bool $update Whether this is an existing post being updated or not.
 	 */
-	public function savePost( $source_post_id, $post ) {
+	public function savePost( $source_post_id, $source_post ) {
 		$this->writeLog( 'savePost()' );
 		$this->writeLog( $source_post_id );
-		$this->writeLog( $post->post_title );
 
 
 		// quit if post is post revisions
@@ -106,13 +94,13 @@ class HMNetworkAutoPost {
 		}
 
 		// quit if post is trash or auto draft
-		if( $post->post_status == 'trash' || $post->post_status == 'draft' || $post->post_status == 'auto-draft' ) {
+		if( $source_post->post_status == 'trash' || $source_post->post_status == 'draft' || $source_post->post_status == 'auto-draft' ) {
 			$this->writeLog( 'Ignore drafts, auto drafts or trashed posts...' );
 			return;
 		}
 
 		// quit if post type is not within settings
-		if( !array_key_exists( $post->post_type, $this->settings ) ) {
+		if( !array_key_exists( $source_post->post_type, $this->settings ) ) {
 			$this->writeLog( 'Ignore post type...' );
 			return;
 		}
@@ -138,11 +126,11 @@ class HMNetworkAutoPost {
 				continue;
 			}
 
-			$_new = ( array_key_exists( $target_site_id, $relations ) ) ? false : true;
+			$is_new = ( array_key_exists( $target_site_id, $relations ) ) ? false : true;
 
 			// no MLP related post exists in target site
-			if( $_new ) {
-				$target_post_id = $this->createPost( $post, $source_site_id, $source_post_id, $target_site_id );
+			if( $is_new ) {
+				$target_post_id = $this->createPost( $source_post, $source_site_id, $source_post_id, $target_site_id );
 			// MLP related post on target site exists
 			} else {
 				$target_post_id = $relations[$target_site_id];
@@ -150,35 +138,54 @@ class HMNetworkAutoPost {
 
 
 			/**
-			 * Set title
+			 * Set title 
+			 * only if title setting is permanent 
 			 */
-			if( $_new || ( array_key_exists( 'post_title', $this->settings[$post->post_type]['permanent'] ) && $this->settings[$post->post_type]['permanent']['post_title'] ) ) {
-				$this->setPostTitle( $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+			if( !$is_new ) {
+				if( array_key_exists( 'post_title', $this->settings[$source_post->post_type]['permanent'] ) && $this->settings[$source_post->post_type]['permanent']['post_title'] ) {
+					$this->setPostTitle( $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+				}
 			}
-
 
 			/**
 			 * Set content
 			 */
-			if( $_new || ( array_key_exists( 'post_content', $this->settings[$post->post_type]['permanent'] ) && $this->settings[$post->post_type]['permanent']['post_content'] ) ) {
-				$this->setPostContent( $source_site_id, $source_post_id, $target_site_id, $target_post_id );
-			}			
+			if( $is_new ) {
+				if( array_key_exists( 'post_content', $this->settings[$source_post->post_type] ) && $this->settings[$source_post->post_type]['post_content'] ) {
+					$this->setPostContent( $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+				}
+			} else {
+				if( array_key_exists( 'post_content', $this->settings[$source_post->post_type]['permanent'] ) && $this->settings[$source_post->post_type]['permanent']['post_content'] ) {
+					$this->setPostContent( $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+				}	
+			}
 
 
 			/**
 			 * Set thumbnail image
 			 */
-			if( $_new || ( array_key_exists( 'post_thumbnail', $this->settings[$post->post_type]['permanent'] ) && $this->settings[$post->post_type]['permanent']['post_thumbnail'] ) ) {
-				$this->setPostThumbnail( $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+			if( $is_new ) {
+				if( array_key_exists( 'post_thumbnail', $this->settings[$source_post->post_type] ) && $this->settings[$source_post->post_type]['post_thumbnail'] ) {
+					$this->setPostThumbnail( $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+				}
+			} else {
+				if( array_key_exists( 'post_thumbnail', $this->settings[$source_post->post_type]['permanent'] ) && $this->settings[$source_post->post_type]['permanent']['post_thumbnail'] ) {
+					$this->setPostThumbnail( $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+				}
 			}
 
 
 			/**
 			 * Set tags, cetagories and custom taxonomies
-			 * Use get_object_taxonomies() on post_type
 			 */
-			if( $_new || ( array_key_exists( 'taxonomies', $this->settings[$post->post_type]['permanent'] ) && $this->settings[$post->post_type]['permanent']['taxonomies'] ) ) {
-				$this->setTaxonomies( $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+			if( $is_new ) {
+				if( array_key_exists( 'taxonomies', $this->settings[$source_post->post_type] ) && $this->settings[$source_post->post_type]['taxonomies'] ) {
+					$this->setTaxonomies( $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+				}
+			} else {
+				if( array_key_exists( 'taxonomies', $this->settings[$source_post->post_type]['permanent'] ) && $this->settings[$source_post->post_type]['permanent']['taxonomies'] ) {
+					$this->setTaxonomies( $source_site_id, $source_post_id, $target_site_id, $target_post_id );				
+				}				
 			}
 
 
@@ -190,20 +197,30 @@ class HMNetworkAutoPost {
 
 
 			/**
-			 * Meta relations:
+			 * Meta + meta relations:
 			 * Copy all meta fields defined in settings
-			 * that are post relations
 			 */
-			if( $_new && ( array_key_exists( 'meta', $this->settings[$post->post_type] ) && $this->settings[$post->post_type]['meta'] ) ) {
-				$fieldsMeta = $this->settings[get_post_type( $source_post_id )]['meta'];
-				$fieldsMetaRelations = $this->settings[get_post_type( $source_post_id )]['meta-relations'];
-			} elseif( ( array_key_exists( 'meta', $this->settings[$post->post_type]['permanent'] ) && $this->settings[$post->post_type]['permanent']['meta'] ) || array_key_exists( 'meta-relations', $this->settings[$post->post_type]['permanent'] ) && $this->settings[$post->post_type]['permanent']['meta-relations'] ) {
-				$fieldsMeta = $this->settings[get_post_type( $source_post_id )]['permanent']['meta'];
-				$fieldsMetaRelations = $this->settings[get_post_type( $source_post_id )]['permanent']['meta-relations'];
+			if( $is_new ) {
+				if( array_key_exists( 'meta', $this->settings[$source_post->post_type] ) && $this->settings[$source_post->post_type]['meta'] ) {
+					$fields = $this->settings[$source_post->post_type]['meta'];
+					$this->setMeta( $fields, $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+				}
+
+				if( array_key_exists( 'meta-relations', $this->settings[$source_post->post_type] ) && $this->settings[$source_post->post_type]['meta-relations'] ) {
+					$fields = $this->settings[$source_post->post_type]['meta-relations'];
+					$this->setMetaRelations( $fields, $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+				}
+			} else {
+				if( array_key_exists( 'meta', $this->settings[$source_post->post_type]['permanent'] ) && $this->settings[$source_post->post_type]['permanent']['meta'] ) {
+					$fields = $this->settings[$source_post->post_type]['permanent']['meta'];
+					$this->setMeta( $fields, $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+				} 			
+
+				if( array_key_exists( 'meta-relations', $this->settings[$source_post->post_type]['permanent'] ) && $this->settings[$source_post->post_type]['permanent']['meta-relations'] ) {
+					$fields = $this->settings[$source_post->post_type]['permanent']['meta-relations'];
+					$this->setMetaRelations( $fields, $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+				}
 			}
-			
-			$this->setMeta( $fieldsMeta, $source_site_id, $source_post_id, $target_site_id, $target_post_id );
-			$this->setMetaRelations( $fieldsMetaRelations, $source_site_id, $source_post_id, $target_site_id, $target_post_id );
 
 
 			/**
@@ -228,30 +245,26 @@ class HMNetworkAutoPost {
 	 * @param int $target_site_id site ID of target site
 	 * @return int $target_post_id post ID of target post
 	 */
-	public function createPost( $post, $source_site_id, $source_post_id, $target_site_id ) {
+	public function createPost( $source_post, $source_site_id, $source_post_id, $target_site_id ) {
 		$this->writeLog( 'createPost()' );
 
 		if( !function_exists( 'mlp_get_linked_elements' ) ) {
 			return;
 		}
 
-		$post_status = ( $this->settings[$post->post_type]['post_status'] ) ? $this->settings[$post->post_type]['post_status'] : 'draft';
+		$post_status = ( $this->settings[$source_post->post_type]['post_status'] ) ? $this->settings[$source_post->post_type]['post_status'] : 'draft';
 		$post_data = array(
 			'ID' 				=> 0,
-			'post_title' 		=> $post->post_title,
-			'post_date' 		=> $post->post_date,
-			'post_modified' 	=> $post->post_modified,
-			'post_modified_gmt' => $post->post_modified_gmt,
+			'post_title' 		=> $source_post->post_title,
+			'post_date' 		=> $source_post->post_date,
+			'post_modified' 	=> $source_post->post_modified,
+			'post_modified_gmt' => $source_post->post_modified_gmt,
 			'post_status' 		=> $post_status,
-			'post_author' 		=> $post->post_author,
-			'post_excerpt'  	=> $post->post_excerpt,
-			'post_type' 		=> $post->post_type,
-			'post_name' 		=> $post->post_name
+			'post_author' 		=> $source_post->post_author,
+			'post_excerpt'  	=> $source_post->post_excerpt,
+			'post_type' 		=> $source_post->post_type,
+			'post_name' 		=> $source_post->post_name
 		);
-
-		if( array_key_exists( 'post_content', $this->settings[$source_post->post_type] ) ) {
-			$post_data['post_content'] = $post->post_content;
-		}
 
 		// remove save_post action to avoid infinite loop
 		remove_action( 'save_post', array( $this, 'savePost' ), 100 );	
@@ -305,6 +318,8 @@ class HMNetworkAutoPost {
 	 * @param int $target_post_id post ID of target post
 	 */
 	public function setPostTitle( $source_site_id, $source_post_id, $target_site_id, $target_post_id ) {
+		$this->writeLog( 'setPostTitle()' );
+
 		$source_post = get_post( $source_post_id );
 		if( !$source_post ) {
 			return;
@@ -337,6 +352,8 @@ class HMNetworkAutoPost {
 	 * @param int $target_post_id post ID of target post
 	 */
 	public function setPostContent( $source_site_id, $source_post_id, $target_site_id, $target_post_id ) {
+		$this->writeLog( 'setPostContent()' );
+		
 		$source_post = get_post( $source_post_id );
 		if( !$source_post ) {
 			return;
@@ -369,7 +386,7 @@ class HMNetworkAutoPost {
 	 * @param int $target_post_id post ID of target post
 	 */
 	public function setPostThumbnail( $source_site_id, $source_post_id, $target_site_id, $target_post_id ) {
-		$this->writeLog( 'setPostThumbnail' );
+		$this->writeLog( 'setPostThumbnail()' );
 
 		if( !function_exists( 'mlp_get_linked_elements' ) ) {
 			return;
@@ -518,25 +535,25 @@ class HMNetworkAutoPost {
 			return;
 		}
 
-		if( $fields ) {	
-			$this->writeLog( $fields );
-			
+		if( $fields ) {				
 			foreach( $fields as $key => $state ) {
-				$value = get_post_meta( $source_post_id, $key, true );
-				if( $value ) {		
-					// switch to target site
-					switch_to_blog( $target_site_id );											
-					// update meta								
-					update_post_meta( $target_post_id, $key, $value );								
-					// switch back to source post
-					restore_current_blog();						
-				} else {
-					// switch to target site
-					switch_to_blog( $target_site_id );											
-					// update meta								
-					delete_post_meta( $target_post_id, $key );								
-					// switch back to source post
-					restore_current_blog();						
+				if( $state ) {
+					$value = get_post_meta( $source_post_id, $key, true );
+					if( $value ) {		
+						// switch to target site
+						switch_to_blog( $target_site_id );											
+						// update meta								
+						update_post_meta( $target_post_id, $key, $value );								
+						// switch back to source post
+						restore_current_blog();						
+					} else {
+						// switch to target site
+						switch_to_blog( $target_site_id );											
+						// update meta								
+						delete_post_meta( $target_post_id, $key );								
+						// switch back to source post
+						restore_current_blog();						
+					}
 				}
 			}		
 		}
@@ -724,9 +741,9 @@ class HMNetworkAutoPost {
 	public function writeLog( $log )  {
 		if( true === WP_DEBUG ) {
 			if( is_array( $log ) || is_object( $log ) ) {
-				error_log( 'hmnap: ' . print_r( $log, true ) . "\n", 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
+				error_log( 'HMNAP: ' . print_r( $log, true ) . "\n", 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
 			} else {
-				error_log( 'hmnap: ' . $log . "\n", 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
+				error_log( 'HMNAP: ' . $log . "\n", 3, trailingslashit( ABSPATH ) . 'wp-content/debuglog.log' );
 			}
 		}
 	}
