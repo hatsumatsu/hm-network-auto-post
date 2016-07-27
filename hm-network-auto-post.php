@@ -105,6 +105,12 @@ class HMNetworkAutoPost {
 			return;
 		}
 
+		// quit if post is marked not to sync
+		if( get_post_meta( $source_post_id, 'hmnap--ignore', true ) ) {
+			$this->writeLog( 'Ignore post by marker...' );
+			return;
+		}
+
 		$sites = wp_get_sites();
 		$source_site_id = get_current_blog_id();
 
