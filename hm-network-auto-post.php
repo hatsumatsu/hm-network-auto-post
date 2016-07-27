@@ -347,6 +347,18 @@ class HMNetworkAutoPost {
 		restore_current_blog();
 		// re-add save_post action
 		add_action( 'save_post', array( $this, 'savePost' ), 100, 2 );
+
+
+		/**
+		 * Call custom action: set post title
+		 */
+		do_action( 
+			'hmnap/set_post_title',
+			$source_site_id,
+			$target_site_id,
+			$source_post_id,
+			$target_post_id
+		);		
 	}
 
 
@@ -380,7 +392,19 @@ class HMNetworkAutoPost {
 		// switch back to source site
 		restore_current_blog();
 		// re-add save_post action
-		add_action( 'save_post', array( $this, 'savePost' ), 100, 2 );		
+		add_action( 'save_post', array( $this, 'savePost' ), 100, 2 );	
+
+
+		/**
+		 * Call custom action: set post content
+		 */
+		do_action( 
+			'hmnap/set_post_content',
+			$source_site_id,
+			$target_site_id,
+			$source_post_id,
+			$target_post_id
+		);		
 	}	
 
 
@@ -429,6 +453,18 @@ class HMNetworkAutoPost {
 			// switch back to source site
 			restore_current_blog();				
 		}
+
+
+		/**
+		 * Call custom action: set post thumbnail
+		 */
+		do_action( 
+			'hmnap/set_post_thumbnail',
+			$source_site_id,
+			$target_site_id,
+			$source_post_id,
+			$target_post_id
+		);			
 	}
 
 
@@ -475,6 +511,18 @@ class HMNetworkAutoPost {
 				}
 			}
 		}
+
+
+		/**
+		 * Call custom action: set taxonomies
+		 */
+		do_action( 
+			'hmnap/set_taxonomies',
+			$source_site_id,
+			$target_site_id,
+			$source_post_id,
+			$target_post_id
+		);		
 	}
 
 
@@ -522,6 +570,18 @@ class HMNetworkAutoPost {
 				}
 			}
 		}
+
+
+		/**
+		 * Call custom action: set attachments
+		 */
+		do_action( 
+			'hmnap/set_attachments',
+			$source_site_id,
+			$target_site_id,
+			$source_post_id,
+			$target_post_id
+		);			
 	}
 
 
@@ -563,6 +623,18 @@ class HMNetworkAutoPost {
 				}
 			}		
 		}
+
+
+		/**
+		 * Call custom action: set meta
+		 */
+		do_action( 
+			'hmnap/set_meta',
+			$source_site_id,
+			$target_site_id,
+			$source_post_id,
+			$target_post_id
+		);			
 	}	
 
 
@@ -647,7 +719,19 @@ class HMNetworkAutoPost {
 					restore_current_blog();						
 				}
 			}
-		}							
+		}
+
+
+		/**
+		 * Call custom action: set meta relations
+		 */
+		do_action( 
+			'hmnap/set_meta_relations',
+			$source_site_id,
+			$target_site_id,
+			$source_post_id,
+			$target_post_id
+		);	
 	}
 
 
