@@ -161,7 +161,13 @@ class HMNetworkAutoPost {
 					$this->setPostContent( $source_site_id, $source_post_id, $target_site_id, $target_post_id );
 				}
 			} else {
-				if( array_key_exists( 'post_content', $this->settings[$source_post->post_type]['permanent'] ) && $this->settings[$source_post->post_type]['permanent']['post_content'] ) {
+				// check if target content is empty
+				switch_to_blog( $target_site_id );
+				$target_post = get_post( $target_post_id );
+				restore_current_blog();
+
+				if( array_key_exists( 'post_content', $this->settings[$source_post->post_type]['permanent'] ) && $this->settings[$source_post->post_type]['permanent']['post_content']
+				 || array_key_exists( 'post_content', $this->settings[$source_post->post_type] ) && $this->settings[$source_post->post_type]['post_content'] === 'not_empty' && empty( trim( $target_post->post_content ) ) ) {
 					$this->setPostContent( $source_site_id, $source_post_id, $target_site_id, $target_post_id );
 				}	
 			}
