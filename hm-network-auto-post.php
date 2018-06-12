@@ -30,6 +30,11 @@ class HMNetworkAutoPost {
 		// use `save_post` to include ACF fields which are available later than `publish_post` 
 		add_action( 'save_post', array( $this, 'savePost' ), 100, 2 );			
 
+		// use ACF's own acf/save_post hook add a priority > 10 to include repeater field data
+		if( class_exists( 'acf' ) ) {
+			add_action( 'acf/save_post', array( $this, 'ACFSavePost' ), 9999 );	
+		}
+
 		// init meta box
 		add_action( 'load-post.php', array( $this, 'initMetabox' ) );
 		add_action( 'load-post-new.php', array( $this, 'initMetabox' ) );
@@ -233,6 +238,25 @@ class HMNetworkAutoPost {
 					$this->setMetaRelations( $fields, $source_site_id, $source_post_id, $target_site_id, $target_post_id );
 				}
 			}
+
+
+			/**
+			 * ACF fields:
+			 * Copy all ACF fields defined in settings
+			 * Exception: post relations in subfields...
+			 * Exception: sync is always permanent
+			 */
+			if( $is_new ) {			
+				if( array_key_exists( 'acf', $this->settings[$source_post->post_type] ) && $this->settings[$source_post->post_type]['acf'] ) {
+					$fields = $this->settings[$source_post->post_type]['acf'];
+					$this->setACF( $fields, $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+				} 
+			} else {
+				if( array_key_exists( 'acf', $this->settings[$source_post->post_type]['permanent'] ) && $this->settings[$source_post->post_type]['permanent']['acf'] ) {
+					$fields = $this->settings[$source_post->post_type]['permanent']['acf'];
+					$this->setACF( $fields, $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+				} 
+			} 	
 
 
 			/**
@@ -739,6 +763,153 @@ class HMNetworkAutoPost {
 			$target_post_id
 		);	
 	}
+
+
+	/**
+	 * Set ACF repeater field data
+	 * @param array $fields array of meta fields to copy
+	 * @param int $source_site_id site ID of source site
+	 * @param int $source_post_id post ID of source post
+	 * @param int $target_site_id site ID of target site
+	 * @param int $target_post_id post ID of target post
+	 */
+	public function setACF( $fields, $source_site_id, $source_post_id, $target_site_id, $target_post_id ) {
+		$this->writeLog( 'setACF()' );
+		$this->writeLog( $fields );		
+
+		if( !class_exists( 'acf' ) ) {
+			return;
+		}
+
+		if( !function_exists( 'mlp_get_linked_elements' ) ) {
+			return;
+		}
+
+		if( $fields ) {				
+			foreach( $fields as $key => $state ) {
+				$this->writeLog( 'key: ' . $key . ' state: ' . $state );
+
+				if( $state ) {
+					$fieldObject = get_field_object( $key, $source_post_id );
+					$fieldKey = $fieldObject['key'];
+					$value = get_field( $key, $source_post_id, false );
+					$this->writeLog( 'fieldKey: ' . $fieldKey );
+					$this->writeLog( $value );
+
+					if( $value ) {		
+						// switch to target site
+						switch_to_blog( $target_site_id );											
+						// update meta								
+						update_field( $fieldKey, $value, $target_post_id );								
+						// switch back to source post
+						restore_current_blog();
+					} else {
+						// switch to target site
+						switch_to_blog( $target_site_id );											
+						// update meta								
+						delete_field( $key, $target_post_id );								
+						// switch back to source post
+						restore_current_blog();	
+					}
+				}
+			}		
+		}
+
+
+		/**
+		 * Call custom action: set meta
+		 */
+		do_action( 
+			'hmnap/set_acf',
+			$source_site_id,
+			$target_site_id,
+			$source_post_id,
+			$target_post_id
+		);			
+	}	
+
+
+	/**
+	 * Action to call on acf/save_post hook
+	 * @param int $source_post_id Source post ID
+	 * @param bool $update Whether this is an existing post being updated or not.
+	 */
+	public function ACFSavePost( $source_post_id ) {
+		$this->writeLog( 'ACFSavePost()' );
+		$this->writeLog( $source_post_id );
+
+		$source_post = get_post( $source_post_id );
+
+		// quit if post is post revisions
+		if( wp_is_post_revision( $source_post_id ) ) {
+			$this->writeLog( 'Ignore post revision...' );
+			return;
+		}
+
+		// quit if post is trash or auto draft
+		if( $source_post->post_status == 'trash' || $source_post->post_status == 'draft' || $source_post->post_status == 'auto-draft' ) {
+			$this->writeLog( 'Ignore drafts, auto drafts or trashed posts...' );
+			return;
+		}
+
+		// quit if post type is not within settings
+		if( !array_key_exists( $source_post->post_type, $this->settings ) ) {
+			$this->writeLog( 'Ignore post type...' );
+			return;
+		}
+
+		// quit if post is marked not to sync
+		if( get_post_meta( $source_post_id, 'hmnap--ignore', true ) ) {
+			$this->writeLog( 'Ignore post by marker...' );
+			return;
+		}
+
+		$sites = wp_get_sites();
+		$source_site_id = get_current_blog_id();
+
+		// get existing MLP relations
+		// Array( [site_id] => [post_id] ) including source site
+		$relations = mlp_get_linked_elements( $source_post_id, '', $source_site_id );
+		$this->writeLog( 'Existing post relations: ' );
+		$this->writeLog( $relations );
+		
+
+		// each site... 
+		foreach( $sites as $site ) {
+			$target_site_id = $site['blog_id'];
+
+			// skip current site
+			if( $target_site_id == $source_site_id ) {
+				continue;
+			}
+
+			$target_post_id = $relations[$target_site_id];
+
+
+			/**
+			 * ACF fields:
+			 * Copy all ACF fields defined in settings
+			 * Exception: post relations in subfields...
+			 * Exception: sync is always permanent
+			 */
+			if( array_key_exists( 'acf', $this->settings[$source_post->post_type]['permanent'] ) && $this->settings[$source_post->post_type]['permanent']['acf'] ) {
+				$fields = $this->settings[$source_post->post_type]['permanent']['acf'];
+				$this->setACF( $fields, $source_site_id, $source_post_id, $target_site_id, $target_post_id );
+			} 					
+
+
+			/**
+			 * Call custom action: save post
+			 */
+			do_action( 
+				'hmnap/acf/save_post',
+				$source_site_id,
+				$target_site_id,
+				$source_post_id,
+				$target_post_id
+			);				
+		}
+	}	
 
 
 	/**
