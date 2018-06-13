@@ -2,7 +2,7 @@
 
 /*
 Plugin Name: HM Network Auto Post
-Version: 0.19
+Version: 0.19.1
 Description: Automatically creates post copies on remote sites in the same network and builds MLP relations when possible.
 Plugin URI:
 Author: Martin Wecke
@@ -793,6 +793,8 @@ class HMNetworkAutoPost {
 					$SourceFieldObject = get_field_object( $key, $source_post_id );
 					$SourceFieldKey = $SourceFieldObject['key'];
 					$value = get_field( $key, $source_post_id, false );
+					$value = $SourceFieldObject['value'];
+
 					$this->writeLog( 'SourceFieldKey: ' . $SourceFieldKey );
 					$this->writeLog( $value );
 
@@ -803,10 +805,8 @@ class HMNetworkAutoPost {
 						$TargetFieldObject = get_field_object( $key, $target_post_id );
 						$TargetFieldKey = $TargetFieldObject['key'];
 						$this->writeLog( 'TargetFieldKey: ' . $TargetFieldKey );										
-						$keyToUse = ( $TargetFieldKey ) ? $TargetFieldKey : $key;
-
 						// update meta								
-						update_field( $keyToUse, $value, $target_post_id );								
+						update_field( $key, $value, $target_post_id );								
 						// switch back to source post
 						restore_current_blog();
 					} else {
