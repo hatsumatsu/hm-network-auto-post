@@ -790,15 +790,19 @@ class HMNetworkAutoPost {
 				$this->writeLog( 'key: ' . $key . ' state: ' . $state );
 
 				if( $state ) {
-					$fieldObject = get_field_object( $key, $source_post_id );
-					$fieldKey = $fieldObject['key'];
+					$SourceFieldObject = get_field_object( $key, $source_post_id );
+					$SourceFieldKey = $SourceFieldObject['key'];
 					$value = get_field( $key, $source_post_id, false );
-					$this->writeLog( 'fieldKey: ' . $fieldKey );
+					$this->writeLog( 'SourceFieldKey: ' . $SourceFieldKey );
 					$this->writeLog( $value );
 
 					if( $value ) {		
 						// switch to target site
-						switch_to_blog( $target_site_id );											
+						switch_to_blog( $target_site_id );	
+
+						$TargetFieldObject = get_field_object( $key, $target_post_id );
+						$TargetFieldKey = $TargetFieldObject['key'];
+						$this->writeLog( 'TargetFieldKey: ' . $TargetFieldKey );										
 						// update meta								
 						update_field( $fieldKey, $value, $target_post_id );								
 						// switch back to source post
