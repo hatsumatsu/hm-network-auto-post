@@ -2,7 +2,7 @@
 
 /*
 Plugin Name: HM Network Auto Post
-Version: 0.20
+Version: 0.20.1
 Description: Automatically creates post copies on remote sites in the same network and builds MLP relations when possible.
 Plugin URI:
 Author: Martin Wecke
@@ -790,7 +790,7 @@ class HMNetworkAutoPost {
 				$this->writeLog( 'key: ' . $key . ' state: ' . $state );
 
 				if( $state ) {
-					$SourceFieldObject = get_field_object( $key, $source_post_id );
+					$SourceFieldObject = get_field_object( $key, $source_post_id, false );
 					$value = $SourceFieldObject['value'];
 
 					$this->writeLog( $SourceFieldObject );
